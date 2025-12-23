@@ -1,3 +1,27 @@
+/* 
+综合说明（中文）：
+
+本文件实现了 Client 与后端协作（collab）相关的 HTTP 接口封装与辅助类型：
+- 提供创建、更新、删除单个协作对象的接口（create_collab / update_collab / delete_collab）。
+- 提供批量查询与批量创建接口（batch_post_collab / batch_get_collab / create_collab_list），
+  包含对客户端侧并行压缩、帧化（frame）以及分块上传的实现细节。
+- 实现了实时消息的发送（post_realtime_msg）与发布流式协作项（publish_collabs），
+  使用了流（Stream）抽象以支持分块/流式传输并提供对应的序列化/帧协议。
+- 支持与数据库行相关的一系列操作：列出数据库、获取字段、添加/upsert 行、获取行详情与更新检测等。
+- 对于需要传输二进制或 protobuf 的接口（如 collab_full_sync），实现了对数据的压缩（zstd / brotli）、编码与解码流程，
+  并在必要时对响应体进行解压与反序列化。
+- 包含重试策略支持（基于 tokio_retry），对可重试错误进行了封装与判定（RetryGetCollabCondition / GetCollabAction）。
+- 广泛使用了项目内的错误类型（AppError / AppResponseError）、追踪/日志（tracing::instrument / event）以及
+  reqwest 的异步 HTTP 客户端构建器（含鉴权与压缩扩展方法）。
+
+注意事项与约定：
+- 本文件中对“帧头/长度字段”的字节序（big-endian / little-endian）在注释处有说明，客户端与服务端必须保持一致。
+- 元数据与数据打包规则在 serialize_metadata_data 中定义（长度字段 + 元数据 + 数据），用于 publish 流。
+- 本文件的各个异步方法通常返回 Result<T, AppResponseError>，并通过 process_response_* 系列助手函数
+  统一处理 HTTP 响应与错误映射。
+
+该注释旨在为阅读者提供文件功能的整体视图，具体实现细节请参考各函数的逐行注释。
+*/
 use crate::entity::CollabType; // 导入当前 crate（包）中 entity 模块下的 CollabType 类型（用于表示协作对象的类型）
 use crate::{
   blocking_brotli_compress, brotli_compress, process_response_data, process_response_error, Client,
